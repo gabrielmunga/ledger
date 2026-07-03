@@ -864,7 +864,8 @@ function renderSettings(){
       const t=Object.values(D.settings.pcts).reduce((s,v)=>s+v,0);
       document.getElementById('budget-pct-display').textContent=`${t}% allocated · ${100-t>=0?fmts(Math.round(monthlyTH()*(100-t)/100))+' unallocated':fmts(Math.round(monthlyTH()*(t-100)/100))+' over'}`;
       document.getElementById('budget-pct-display').style.color=t>100?'var(--red)':t===100?'var(--green)':'var(--t2)';
-      persist();
+      D.settings.lastModified=Date.now();
+      persistAndSync();
     });
   });
 
@@ -882,6 +883,7 @@ function renderSettings(){
 function saveS(){
   D.settings.pay=parseFloat(document.getElementById('set-pay').value)||2052;
   D.settings.nextPayday=document.getElementById('set-pd').value;
+  D.settings.lastModified=Date.now();
   persistAndSync();renderAll();toast('Saved ✓');
 }
 function updateNextPdDisplay(){
@@ -1187,8 +1189,16 @@ async function syncNow(silent){
       const localSnapDates=new Set(D.snapshots.map(s=>s.date));
       const mergedSnaps=[...D.snapshots];
       (remoteD.snapshots||[]).forEach(s=>{if(!localSnapDates.has(s.date))mergedSnaps.push(s);});
-      // accounts: prefer local (user just updated)
-      dataToSave={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps};
+      // settings: use whichever was more recently changed
+      // we track a lastModified timestamp on settings to know which is newer
+      const localSettingsTime=D.settings.lastModified||0;
+      const remoteSettingsTime=(remoteD.settings&&remoteD.settings.lastModified)||0;
+      const winningSettings=remoteSettingsTime>localSettingsTime?remoteD.settings:D.settings;
+      // accounts: merge by id, prefer local version if same id exists
+      const localAcctIds=new Set(D.accounts.map(a=>a.id));
+      const mergedAccts=[...D.accounts];
+      (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds.has(a.id))mergedAccts.push(a);});
+      dataToSave={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts,settings:winningSettings};
       D=dataToSave;
       persist();
       renderAll();
@@ -1478,7 +1488,13 @@ if(GH.token){
       const localSnapDates=new Set(D.snapshots.map(s=>s.date));
       const mergedSnaps=[...D.snapshots];
       (remoteD.snapshots||[]).forEach(s=>{if(!localSnapDates.has(s.date))mergedSnaps.push(s);});
-      D={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps};
+      const localAcctIds2=new Set(D.accounts.map(a=>a.id));
+      const mergedAccts2=[...D.accounts];
+      (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds2.has(a.id))mergedAccts2.push(a);});
+      const localST=D.settings.lastModified||0;
+      const remoteST=(remoteD.settings&&remoteD.settings.lastModified)||0;
+      const winSettings=remoteST>localST?remoteD.settings:D.settings;
+      D={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts2,settings:winSettings};
       persist();renderAll();
       updateSyncStatus('ok');
     } else {
