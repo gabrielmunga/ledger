@@ -350,19 +350,6 @@ input[type=range]:focus{outline:none}
   <div class="sl3">Achievements</div>
   <div class="card"><div id="ach-list"></div></div>
 
-  <div class="sl3">Sync</div>
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px;background:var(--s2);border-radius:var(--rs)">
-      <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0" id="sync-dot" style="background:var(--t3)"></div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:600" id="sync-status">Not connected</div><div style="font-size:11px;color:var(--t2);margin-top:1px" id="sync-last">Set up GitHub sync below</div></div>
-      <button onclick="syncNow()" id="sync-btn" style="padding:6px 12px;border-radius:var(--rs);border:1.5px solid var(--border);background:none;font-size:12px;cursor:pointer;font-family:var(--font);font-weight:700">Sync now</button>
-    </div>
-    <div class="fg"><label>GitHub username</label><input type="text" id="gh-user" placeholder="yourusername" oninput="saveGHConfig()"></div>
-    <div class="fg"><label>Repository name</label><input type="text" id="gh-repo" placeholder="ledger" oninput="saveGHConfig()"></div>
-    <div class="fg"><label>Personal access token</label><input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" oninput="saveGHConfig()"><div style="font-size:11px;color:var(--t2);margin-top:5px">github.com → Settings → Developer settings → Personal access tokens (classic) → repo scope</div></div>
-    <button onclick="syncNow()" style="width:100%;padding:12px;border-radius:var(--r);border:none;background:var(--text);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);margin-top:4px">Connect & sync</button>
-  </div>
-
   <div class="sl3">Data</div>
   <div class="card">
     <div class="sr"><label>Export data</label><button onclick="exportD()" style="padding:7px 14px;border-radius:var(--rs);border:1.5px solid var(--border);background:none;font-size:13px;cursor:pointer;font-family:var(--font);font-weight:700">Export</button></div>
@@ -842,7 +829,6 @@ function renderSettings(){
   document.getElementById('set-pay').value=D.settings.pay;
   document.getElementById('set-pd').value=D.settings.nextPayday;
   updateNextPdDisplay();
-  loadGHConfig();
   const th=monthlyTH();
   const totalPct=Object.values(D.settings.pcts).reduce((s,v)=>s+v,0);
   document.getElementById('budget-total-display').textContent=fmts(th);
@@ -865,7 +851,7 @@ function renderSettings(){
       document.getElementById('budget-pct-display').textContent=`${t}% allocated · ${100-t>=0?fmts(Math.round(monthlyTH()*(100-t)/100))+' unallocated':fmts(Math.round(monthlyTH()*(t-100)/100))+' over'}`;
       document.getElementById('budget-pct-display').style.color=t>100?'var(--red)':t===100?'var(--green)':'var(--t2)';
       D.settings.lastModified=Date.now();
-      persistAndSync();
+      persist();
     });
   });
 
@@ -884,7 +870,7 @@ function saveS(){
   D.settings.pay=parseFloat(document.getElementById('set-pay').value)||2052;
   D.settings.nextPayday=document.getElementById('set-pd').value;
   D.settings.lastModified=Date.now();
-  persistAndSync();renderAll();toast('Saved ✓');
+  persist();renderAll();toast('Saved ✓');
 }
 function updateNextPdDisplay(){
   const np=nextPayday();
@@ -923,7 +909,7 @@ function logSnap(){
   const total=D.accounts.reduce((s,a)=>s+a.balance,0);
   const m={};D.accounts.forEach(a=>{m[a.name]=a.balance;});
   D.snapshots.push({date:td(),total,accounts:m});
-  persistAndSync();renderHome();renderSettings();toast('📸 Snapshot saved — '+fmts(total));
+  persist();renderHome();renderSettings();toast('📸 Snapshot saved — '+fmts(total));
 }
 
 // ── ACCOUNTS ──
@@ -957,12 +943,12 @@ function saveAcct(){
   if(isPrimary) D.accounts.forEach(a=>{ if(a.id!==eid) a.primary=false; });
   if(eid){const a=D.accounts.find(x=>x.id===eid);if(a){a.name=name;a.balance=bal;a.color=selColor;a.notes=notes;a.type=type;a.primary=isPrimary;a.updated=td();}}
   else D.accounts.push({id:'ac_'+Date.now(),name,balance:bal,color:selColor,notes,type,primary:isPrimary,updated:td()});
-  persistAndSync();closeM('mo-acct');renderSettings();renderHome();toast('Saved ✓');
+  persist();closeM('mo-acct');renderSettings();renderHome();toast('Saved ✓');
 }
 function delAcct(){
   if(D.accounts.length<=1){toast("Can't remove last account");return;}
   D.accounts=D.accounts.filter(a=>a.id!==document.getElementById('ac-eid').value);
-  persistAndSync();closeM('mo-acct');renderSettings();renderHome();toast('Removed');
+  persist();closeM('mo-acct');renderSettings();renderHome();toast('Removed');
 }
 function openBal(id){
   const a=D.accounts.find(x=>x.id===id);if(!a)return;
@@ -974,7 +960,7 @@ function saveBal(){
   const bal=parseFloat(document.getElementById('bal-a').value);if(isNaN(bal)){toast('Enter a balance');return;}
   const a=D.accounts.find(x=>x.id===document.getElementById('bal-id').value);
   if(a){a.balance=bal;a.updated=document.getElementById('bal-dt').value||td();}
-  persistAndSync();closeM('mo-bal');renderSettings();renderHome();toast('Balance updated ✓');
+  persist();closeM('mo-bal');renderSettings();renderHome();toast('Balance updated ✓');
 }
 
 // ── TX MODAL ──
@@ -1052,7 +1038,7 @@ function saveTx(){
     const acct=isCandyCat?getCandyAcct():getPrimaryAcct();
     adjustAcct(acct,delta);
   }
-  persistAndSync();closeM('mo-tx');renderAll();toast((eid?'Updated':'Saved')+' · balance adjusted ✓');
+  persist();closeM('mo-tx');renderAll();toast((eid?'Updated':'Saved')+' · balance adjusted ✓');
 }
 function delTx(){
   const id=document.getElementById('tx-eid').value;
@@ -1064,7 +1050,7 @@ function delTx(){
     adjustAcct(acct,-wasDelta);
   }
   D.transactions=D.transactions.filter(t=>t.id!==id);
-  persistAndSync();closeM('mo-tx');renderAll();toast('Deleted · balance restored');
+  persist();closeM('mo-tx');renderAll();toast('Deleted · balance restored');
 }
 
 // ── UPCOMING MODAL ──
@@ -1089,139 +1075,11 @@ function saveUp(){
   if(!amt||!date||!desc){toast('Fill in all fields');return;}
   if(eid){const item=D.upcoming.find(u=>u.id===eid);if(item){item.amount=amt;item.desc=desc;item.date=date;item.type=upType;item.cat=cat;}}
   else D.upcoming.push({id:Date.now().toString(),amount:amt,desc,date,type:upType,cat});
-  persistAndSync();closeM('mo-up');renderUpcoming();toast(eid?'Updated ✓':'Scheduled ✓');
+  persist();closeM('mo-up');renderUpcoming();toast(eid?'Updated ✓':'Scheduled ✓');
 }
 function delUp(){
   D.upcoming=D.upcoming.filter(u=>u.id!==document.getElementById('up-eid').value);
-  persistAndSync();closeM('mo-up');renderUpcoming();toast('Removed');
-}
-
-// ── GITHUB SYNC ──
-const GH_KEY='ledger_gh_config';
-let GH={user:'',repo:'',token:''};
-let syncInProgress=false;
-let autoSyncTimer=null;
-
-function loadGHConfig(){
-  try{const s=localStorage.getItem(GH_KEY);if(s)GH=JSON.parse(s);}catch(e){}
-  const u=document.getElementById('gh-user');const r=document.getElementById('gh-repo');const t=document.getElementById('gh-token');
-  if(u)u.value=GH.user||'';
-  if(r)r.value=GH.repo||'ledger';
-  if(t)t.value=GH.token||'';
-  updateSyncStatus('idle');
-}
-function saveGHConfig(){
-  GH.user=document.getElementById('gh-user')?.value.trim()||GH.user;
-  GH.repo=document.getElementById('gh-repo')?.value.trim()||GH.repo;
-  GH.token=document.getElementById('gh-token')?.value.trim()||GH.token;
-  localStorage.setItem(GH_KEY,JSON.stringify(GH));
-}
-function updateSyncStatus(state,msg){
-  const dot=document.getElementById('sync-dot');
-  const status=document.getElementById('sync-status');
-  const last=document.getElementById('sync-last');
-  if(!dot)return;
-  const states={
-    idle:{color:GH.token?'#00b37e':'#aaa',text:GH.token?'Connected':'Not connected',sub:GH.token?'Auto-syncs when you make changes':'Set up GitHub sync below'},
-    syncing:{color:'#f59e0b',text:'Syncing...',sub:'Saving to GitHub'},
-    ok:{color:'#00b37e',text:'Synced',sub:'Last sync: '+new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})},
-    error:{color:'#e53935',text:'Sync failed',sub:msg||'Check your token and connection'},
-  };
-  const s=states[state]||states.idle;
-  dot.style.background=s.color;
-  status.textContent=s.text;
-  last.textContent=s.sub;
-}
-
-async function ghGet(){
-  if(!GH.user||!GH.token)return null;
-  const repo=GH.repo||'ledger';
-  try{
-    const r=await fetch(`https://api.github.com/repos/${GH.user}/${repo}/contents/ledger-data.json`,{
-      headers:{'Authorization':'token '+GH.token,'Accept':'application/vnd.github.v3+json'}
-    });
-    if(r.status===404)return{content:null,sha:null};
-    if(!r.ok)return null;
-    const j=await r.json();
-    const content=JSON.parse(atob(j.content.replace(/\n/g,'')));
-    return{content,sha:j.sha};
-  }catch(e){return null;}
-}
-
-async function ghPut(dataObj,sha){
-  if(!GH.user||!GH.token)return false;
-  const repo=GH.repo||'ledger';
-  try{
-    const body={message:'ledger sync '+new Date().toISOString(),content:btoa(unescape(encodeURIComponent(JSON.stringify(dataObj))))};
-    if(sha)body.sha=sha;
-    const r=await fetch(`https://api.github.com/repos/${GH.user}/${repo}/contents/ledger-data.json`,{
-      method:'PUT',
-      headers:{'Authorization':'token '+GH.token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify(body)
-    });
-    return r.ok;
-  }catch(e){return false;}
-}
-
-async function syncNow(silent){
-  if(!GH.user||!GH.token){if(!silent)toast('Enter your GitHub details first');return;}
-  if(syncInProgress)return;
-  syncInProgress=true;
-  updateSyncStatus('syncing');
-  try{
-    const remote=await ghGet();
-    if(remote===null){updateSyncStatus('error','Could not reach GitHub — check token & internet');syncInProgress=false;return;}
-
-    let dataToSave=D;
-    if(remote.content){
-      // merge: remote wins on conflicts by timestamp, local wins if newer
-      const remoteD=remote.content;
-      // simple strategy: take whichever has more transactions as base, then merge unique items
-      const localIds=new Set(D.transactions.map(t=>t.id));
-      const remoteIds=new Set(remoteD.transactions.map(t=>t.id));
-      const merged=[...D.transactions];
-      const newFromRemote=[];
-      remoteD.transactions.forEach(t=>{if(!localIds.has(t.id)){merged.push(t);newFromRemote.push(t);}});
-      // apply balance changes for newly synced transactions
-      newFromRemote.forEach(t=>{
-        const delta=t.type==='income'?t.amount:-t.amount;
-        const acct=t.category==='candy'?getCandyAcct():getPrimaryAcct();
-        adjustAcct(acct,delta);
-      });
-      // same for upcoming
-      const localUpIds=new Set(D.upcoming.map(u=>u.id));
-      const mergedUp=[...D.upcoming];
-      (remoteD.upcoming||[]).forEach(u=>{if(!localUpIds.has(u.id))mergedUp.push(u);});
-      // merge snapshots
-      const localSnapDates=new Set(D.snapshots.map(s=>s.date));
-      const mergedSnaps=[...D.snapshots];
-      (remoteD.snapshots||[]).forEach(s=>{if(!localSnapDates.has(s.date))mergedSnaps.push(s);});
-      // settings: use whichever was more recently changed
-      // we track a lastModified timestamp on settings to know which is newer
-      // accounts: merge by id, prefer local version if same id exists
-      const localAcctIds=new Set(D.accounts.map(a=>a.id));
-      const mergedAccts=[...D.accounts];
-      (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds.has(a.id))mergedAccts.push(a);});
-      // settings: local always wins in syncNow (we just saved something locally)
-      dataToSave={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts,settings:D.settings};
-      D=dataToSave;
-      persist();
-      renderAll();
-    }
-    const ok=await ghPut(dataToSave,remote.sha);
-    if(ok){updateSyncStatus('ok');if(!silent)toast('Synced to GitHub ✓');}
-    else{updateSyncStatus('error');}
-  }catch(e){updateSyncStatus('error',e.message);}
-  syncInProgress=false;
-}
-
-// Auto-sync 3 seconds after any change
-function persistAndSync(){
-  persist();
-  if(GH.token){
-    if(autoSyncTimer)clearTimeout(autoSyncTimer);
-    autoSyncTimer=setTimeout(()=>syncNow(true),3000);
-  }
+  persist();closeM('mo-up');renderUpcoming();toast('Removed');
 }
 
 // ── DATA ──
@@ -1234,13 +1092,12 @@ function importD(e){
       const imported=JSON.parse(ev.target.result);
       if(!imported.transactions){toast('Invalid file');return;}
       D=imported;persist();renderAll();toast('Imported ✓');
-      if(GH.token)syncNow(true);
     }catch(err){toast('Could not read file');}
   };
   reader.readAsText(file);
   e.target.value='';
 }
-function clearD(){if(confirm('Clear all transactions and data? Settings and accounts kept.')){D.transactions=[];D.upcoming=[];D.snapshots=[];persistAndSync();renderAll();toast('Cleared');}}
+function clearD(){if(confirm('Clear all transactions and data? Settings and accounts kept.')){D.transactions=[];D.upcoming=[];D.snapshots=[];persist();renderAll();toast('Cleared');}}
 
 
 // ── AUTO PAYDAY ──
@@ -1475,38 +1332,6 @@ function renderHomeUpcoming(){
 // ── INIT ──
 load();
 renderCG();renderColGrid();renderAll();
-// load GH config and do initial pull sync on startup
-loadGHConfig();
-if(GH.token){
-  (async()=>{
-    updateSyncStatus('syncing');
-    const remote=await ghGet();
-    if(remote&&remote.content){
-      // merge remote into local — remote may have data from other device
-      const remoteD=remote.content;
-      const localIds=new Set(D.transactions.map(t=>t.id));
-      const merged=[...D.transactions];
-      remoteD.transactions.forEach(t=>{if(!localIds.has(t.id))merged.push(t);});
-      const localUpIds=new Set(D.upcoming.map(u=>u.id));
-      const mergedUp=[...D.upcoming];
-      (remoteD.upcoming||[]).forEach(u=>{if(!localUpIds.has(u.id))mergedUp.push(u);});
-      const localSnapDates=new Set(D.snapshots.map(s=>s.date));
-      const mergedSnaps=[...D.snapshots];
-      (remoteD.snapshots||[]).forEach(s=>{if(!localSnapDates.has(s.date))mergedSnaps.push(s);});
-      const localAcctIds2=new Set(D.accounts.map(a=>a.id));
-      const mergedAccts2=[...D.accounts];
-      (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds2.has(a.id))mergedAccts2.push(a);});
-      // for settings: remote always wins on startup pull (other device changed it)
-      // but keep local GH config which is device-specific
-      const mergedSettings=remoteD.settings?{...remoteD.settings}:D.settings;
-      D={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts2,settings:mergedSettings};
-      persist();renderAll();
-      updateSyncStatus('ok');
-    } else {
-      updateSyncStatus('idle');
-    }
-  })();
-}
 </script>
 </body>
 </html>
