@@ -1180,7 +1180,14 @@ async function syncNow(silent){
       const localIds=new Set(D.transactions.map(t=>t.id));
       const remoteIds=new Set(remoteD.transactions.map(t=>t.id));
       const merged=[...D.transactions];
-      remoteD.transactions.forEach(t=>{if(!localIds.has(t.id))merged.push(t);});
+      const newFromRemote=[];
+      remoteD.transactions.forEach(t=>{if(!localIds.has(t.id)){merged.push(t);newFromRemote.push(t);}});
+      // apply balance changes for newly synced transactions
+      newFromRemote.forEach(t=>{
+        const delta=t.type==='income'?t.amount:-t.amount;
+        const acct=t.category==='candy'?getCandyAcct():getPrimaryAcct();
+        adjustAcct(acct,delta);
+      });
       // same for upcoming
       const localUpIds=new Set(D.upcoming.map(u=>u.id));
       const mergedUp=[...D.upcoming];
@@ -1191,14 +1198,12 @@ async function syncNow(silent){
       (remoteD.snapshots||[]).forEach(s=>{if(!localSnapDates.has(s.date))mergedSnaps.push(s);});
       // settings: use whichever was more recently changed
       // we track a lastModified timestamp on settings to know which is newer
-      const localSettingsTime=D.settings.lastModified||0;
-      const remoteSettingsTime=(remoteD.settings&&remoteD.settings.lastModified)||0;
-      const winningSettings=remoteSettingsTime>localSettingsTime?remoteD.settings:D.settings;
       // accounts: merge by id, prefer local version if same id exists
       const localAcctIds=new Set(D.accounts.map(a=>a.id));
       const mergedAccts=[...D.accounts];
       (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds.has(a.id))mergedAccts.push(a);});
-      dataToSave={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts,settings:winningSettings};
+      // settings: local always wins in syncNow (we just saved something locally)
+      dataToSave={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts,settings:D.settings};
       D=dataToSave;
       persist();
       renderAll();
@@ -1491,10 +1496,10 @@ if(GH.token){
       const localAcctIds2=new Set(D.accounts.map(a=>a.id));
       const mergedAccts2=[...D.accounts];
       (remoteD.accounts||[]).forEach(a=>{if(!localAcctIds2.has(a.id))mergedAccts2.push(a);});
-      const localST=D.settings.lastModified||0;
-      const remoteST=(remoteD.settings&&remoteD.settings.lastModified)||0;
-      const winSettings=remoteST>localST?remoteD.settings:D.settings;
-      D={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts2,settings:winSettings};
+      // for settings: remote always wins on startup pull (other device changed it)
+      // but keep local GH config which is device-specific
+      const mergedSettings=remoteD.settings?{...remoteD.settings}:D.settings;
+      D={...D,transactions:merged,upcoming:mergedUp,snapshots:mergedSnaps,accounts:mergedAccts2,settings:mergedSettings};
       persist();renderAll();
       updateSyncStatus('ok');
     } else {
